@@ -1,0 +1,64 @@
+db.sqlite3
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === Django ===
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+/static/
+
+# === Entornos Virtuales ===
+venv/
+env/
+ENV/
+.env/
+env.bak/
+venv.bak/
+
+# === Configuración y Secretos ===
+.env
+.secrets
+*.pot
+
+# === Base de datos (PostgreSQL local / Volcados) ===
+*.sql
+*.sql.gz
+*.backup
+*.dump
+
+# === Editores de código y Sistema ===
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
