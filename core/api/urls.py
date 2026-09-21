@@ -30,6 +30,12 @@ COPIAR Y PEGAR EN POSTMAN:
    - LIST / CREATE:  GET / POST   http://127.0.0.1:8000/api/core/purchase-units/
    - DETAIL / EDIT:  GET / PUT / PATCH / DELETE http://127.0.0.1:8000/api/core/purchase-units/{id}/
    - Búsqueda:       GET          http://127.0.0.1:8000/api/core/purchase-units/?search=barra
+
+6. DOCUMENTOS Y COTIZACIONES DE OBRA:
+   - LIST / CREATE:  GET / POST   http://127.0.0.1:8000/api/core/project-documents/
+   - DETAIL / EDIT:  GET / PUT / PATCH / DELETE http://127.0.0.1:8000/api/core/project-documents/{id}/
+   - Filtrar por obra: GET        http://127.0.0.1:8000/api/core/project-documents/?project=1
+   - Resumen métrico:  GET        http://127.0.0.1:8000/api/core/project-documents/summary/?project=1
 ================================================================================
 """
 
@@ -40,6 +46,8 @@ from core.api import (
     SubcategoryViewSet,
     UnitOfMeasureViewSet,
     PurchaseUnitViewSet,
+    ProjectDocumentViewSet,
+    ProjectExpenseViewSet,
 )
 
 router = DefaultRouter()
@@ -48,5 +56,7 @@ router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'subcategories', SubcategoryViewSet, basename='subcategory')
 router.register(r'units-of-measure', UnitOfMeasureViewSet, basename='unit-of-measure')
 router.register(r'purchase-units', PurchaseUnitViewSet, basename='purchase-unit')
+router.register(r'project-documents', ProjectDocumentViewSet, basename='project-document')
+router.register(r'project-expenses', ProjectExpenseViewSet, basename='project-expense')
 
 urlpatterns = router.urls

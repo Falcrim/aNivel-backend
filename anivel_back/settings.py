@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'core',
     'materials',
+    'inventory',
+    'labor',
 ]
 
 MIDDLEWARE = [
@@ -123,6 +125,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Media files (User uploads: documents, quotes, images)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# File upload limits (25 MB max)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 26214400
+DATA_UPLOAD_MAX_MEMORY_SIZE = 26214400
 
 
 # Email
