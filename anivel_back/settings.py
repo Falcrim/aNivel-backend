@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'storages',
     'core',
     'materials',
     'inventory',
@@ -46,6 +47,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -124,11 +126,46 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files (User uploads: documents, quotes, images)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# Media and Object Storage (Cloudflare R2 / AWS S3)
+R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
+R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
+R2_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+R2_ENDPOINT_URL = os.getenv('R2_ENDPOINT_URL')
+R2_CUSTOM_DOMAIN = os.getenv('R2_CUSTOM_DOMAIN')
+
+if R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME and R2_ENDPOINT_URL:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "access_key": R2_ACCESS_KEY_ID,
+                "secret_key": R2_SECRET_ACCESS_KEY,
+                "bucket_name": R2_BUCKET_NAME,
+                "endpoint_url": R2_ENDPOINT_URL,
+                "region_name": "auto",
+                "signature_version": "s3v4",
+                "custom_domain": R2_CUSTOM_DOMAIN or None,
+                "file_overwrite": False,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 # File upload limits (25 MB max)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 26214400
