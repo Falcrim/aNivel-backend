@@ -5,8 +5,9 @@ from .models import (
     Subcategory,
     UnitOfMeasure,
     PurchaseUnit,
-    ProjectDocument,
-    ProjectExpense,
+    Supplier,
+    ConstructionStage,
+    BudgetItem,
 )
 
 
@@ -42,28 +43,22 @@ class PurchaseUnitAdmin(admin.ModelAdmin):
     search_fields = ('name', 'abbreviation')
 
 
-@admin.register(ProjectDocument)
-class ProjectDocumentAdmin(admin.ModelAdmin):
-    list_display = ('title', 'project', 'document_type', 'supplier_name', 'quoted_amount', 'currency', 'created_at')
-    list_filter = ('document_type', 'currency', 'project')
-    search_fields = ('title', 'supplier_name', 'file_name', 'project__name')
-    date_hierarchy = 'created_at'
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ('name', 'supplier_type', 'contact_name', 'phone', 'is_active')
+    list_filter = ('supplier_type', 'is_active')
+    search_fields = ('name', 'contact_name', 'phone', 'email')
 
 
-@admin.register(ProjectExpense)
-class ProjectExpenseAdmin(admin.ModelAdmin):
-    list_display = (
-        'item_name',
-        'project',
-        'category_type',
-        'quantity',
-        'unit_name',
-        'unit_price',
-        'total_price',
-        'payment_status',
-        'expense_date',
-        'rendicion_number',
-    )
-    list_filter = ('category_type', 'payment_status', 'project', 'rendicion_number')
-    search_fields = ('item_name', 'supplier_name', 'details', 'rendicion_number')
-    date_hierarchy = 'expense_date'
+@admin.register(ConstructionStage)
+class ConstructionStageAdmin(admin.ModelAdmin):
+    list_display = ('name', 'order', 'color', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'description')
+
+
+@admin.register(BudgetItem)
+class BudgetItemAdmin(admin.ModelAdmin):
+    list_display = ('name', 'project', 'category_type', 'stage', 'subcategory', 'supplier', 'unit_price')
+    list_filter = ('project', 'category_type', 'stage', 'subcategory')
+    search_fields = ('name', 'detail', 'contractor_name', 'project__name')

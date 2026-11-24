@@ -13,7 +13,8 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'subcategories_count', 'subcategories']
+        fields = ['id', 'code', 'name', 'is_active', 'subcategories_count', 'subcategories']
+        read_only_fields = ['id', 'code', 'is_active', 'subcategories_count', 'subcategories']
 
     def get_subcategories_count(self, obj) -> int:
         if hasattr(obj, 'subcategories_count'):

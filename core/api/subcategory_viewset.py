@@ -14,6 +14,7 @@ class SubcategoryViewSet(viewsets.ModelViewSet):
     queryset = Subcategory.objects.select_related('category').all()
     serializer_class = SubcategorySerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    pagination_class = None
     search_fields = ['name', 'category__name']
     ordering_fields = ['name', 'category__name']
     ordering = ['category__name', 'name']

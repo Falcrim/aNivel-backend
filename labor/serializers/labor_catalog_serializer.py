@@ -7,6 +7,8 @@ class LaborCatalogItemReadSerializer(serializers.ModelSerializer):
     """Serializer optimizado para lectura y catálogo de mano de obra con detalles."""
     subcategory_detail = SubcategorySerializer(source='subcategory', read_only=True)
     unit_detail = UnitOfMeasureSerializer(source='unit', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True, default=None)
+    supplier_phone = serializers.CharField(source='supplier.phone', read_only=True, default=None)
 
     class Meta:
         model = LaborCatalogItem
@@ -14,6 +16,9 @@ class LaborCatalogItemReadSerializer(serializers.ModelSerializer):
             'id',
             'subcategory',
             'subcategory_detail',
+            'supplier',
+            'supplier_name',
+            'supplier_phone',
             'name',
             'detail',
             'unit',
@@ -34,6 +39,7 @@ class LaborCatalogItemWriteSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'subcategory',
+            'supplier',
             'name',
             'detail',
             'unit',

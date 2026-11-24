@@ -19,10 +19,10 @@ class MaterialCatalogItemViewSet(viewsets.ModelViewSet):
     - Ordenamiento: ?ordering=name o ?ordering=-price_per_purchase_unit
     """
     queryset = MaterialCatalogItem.objects.select_related(
-        'subcategory', 'subcategory__category', 'unit_measure', 'unit_purchase'
+        'subcategory', 'subcategory__category', 'unit_measure', 'unit_purchase', 'supplier'
     ).all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'description', 'subcategory__name']
+    search_fields = ['name', 'description', 'subcategory__name', 'supplier__name']
     ordering_fields = ['name', 'price_per_purchase_unit', 'subcategory__name', 'waste_pct']
     ordering = ['subcategory__name', 'name']
 
@@ -39,12 +39,22 @@ class MaterialCatalogItemViewSet(viewsets.ModelViewSet):
         if subcategory_id:
             queryset = queryset.filter(subcategory_id=subcategory_id)
             
+        # Filtro por proveedor
+        supplier_id = self.request.query_params.get('supplier') or self.request.query_params.get('supplier_id')
+        if supplier_id:
+            queryset = queryset.filter(supplier_id=supplier_id)
+
         # Filtro por activo
         is_active = self.request.query_params.get('is_active')
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() in ['true', '1'])
             
         return queryset
+
+    def paginate_queryset(self, queryset):
+        if self.request.query_params.get('paginate') == 'false':
+            return None
+        return super().paginate_queryset(queryset)
 
     @action(detail=False, methods=['get'], url_path='grouped-by-subcategory')
     def grouped_by_subcategory(self, request):

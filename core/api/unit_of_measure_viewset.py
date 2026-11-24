@@ -11,6 +11,7 @@ class UnitOfMeasureViewSet(viewsets.ModelViewSet):
     queryset = UnitOfMeasure.objects.all()
     serializer_class = UnitOfMeasureSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    pagination_class = None
     search_fields = ['name', 'abbreviation']
     ordering_fields = ['name', 'abbreviation']
     ordering = ['name']

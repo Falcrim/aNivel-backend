@@ -8,6 +8,8 @@ class MaterialCatalogItemReadSerializer(serializers.ModelSerializer):
     subcategory_detail = SubcategorySerializer(source='subcategory', read_only=True)
     unit_measure_detail = UnitOfMeasureSerializer(source='unit_measure', read_only=True)
     unit_purchase_detail = PurchaseUnitSerializer(source='unit_purchase', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True, default=None)
+    supplier_photo_url = serializers.CharField(source='supplier.photo_url', read_only=True, default=None)
 
     class Meta:
         model = MaterialCatalogItem
@@ -15,6 +17,9 @@ class MaterialCatalogItemReadSerializer(serializers.ModelSerializer):
             'id',
             'subcategory',
             'subcategory_detail',
+            'supplier',
+            'supplier_name',
+            'supplier_photo_url',
             'name',
             'description',
             'unit_measure',
@@ -38,6 +43,7 @@ class MaterialCatalogItemWriteSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'subcategory',
+            'supplier',
             'name',
             'description',
             'unit_measure',

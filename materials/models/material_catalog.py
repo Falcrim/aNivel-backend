@@ -15,6 +15,15 @@ class MaterialCatalogItem(MaterialConversionSpec):
         related_name='material_catalog_items',
         verbose_name="Subcategoría"
     )
+    supplier = models.ForeignKey(
+        'core.Supplier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='material_catalog_items',
+        verbose_name="Proveedor sugerido / habitual",
+        help_text="Proveedor al que se suele cotizar o comprar este material."
+    )
     name = models.CharField(max_length=255, verbose_name="Nombre")
     description = models.TextField(blank=True, verbose_name="Descripción")
     is_active = models.BooleanField(default=True, verbose_name="Activo")

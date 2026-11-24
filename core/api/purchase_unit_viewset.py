@@ -11,6 +11,7 @@ class PurchaseUnitViewSet(viewsets.ModelViewSet):
     queryset = PurchaseUnit.objects.all()
     serializer_class = PurchaseUnitSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    pagination_class = None
     search_fields = ['name', 'abbreviation']
     ordering_fields = ['name', 'abbreviation']
     ordering = ['name']

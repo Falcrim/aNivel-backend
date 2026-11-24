@@ -2,7 +2,7 @@ import os
 from decimal import Decimal
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from core.models import (
     Project,
@@ -10,11 +10,11 @@ from core.models import (
     Subcategory,
     UnitOfMeasure,
     PurchaseUnit,
-    ProjectDocument,
-    DocumentType,
-    ProjectExpense,
-    ExpenseCategoryType,
-    PaymentStatus,
+    Supplier,
+    SupplierType,
+    ConstructionStage,
+    BudgetItem,
+    BudgetCategoryType,
 )
 
 
@@ -65,192 +65,466 @@ class CoreAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
 
+    def test_category_create_and_delete_blocked(self):
+        create_resp = self.client.post('/api/core/categories/', {'name': 'Nueva Categoria'})
+        self.assertEqual(create_resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        delete_resp = self.client.delete(f'/api/core/categories/{self.category.id}/')
+        self.assertEqual(delete_resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_category_rename_preserves_code_and_is_active(self):
+        original_code = self.category.code
+        original_active = self.category.is_active
+        resp = self.client.patch(
+            f'/api/core/categories/{self.category.id}/',
+            {'name': 'Insumos Generales', 'code': 'hacked', 'is_active': False},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.category.refresh_from_db()
+        self.assertEqual(self.category.name, 'Insumos Generales')
+        self.assertEqual(self.category.code, original_code)
+        self.assertEqual(self.category.is_active, original_active)
+
     def test_subcategories_filtering(self):
         response = self.client.get(f'/api/core/subcategories/?category={self.category.id}')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
 
+    def test_pagination_standard_response(self):
+        for i in range(5):
+            Project.objects.create(name=f"Proyecto Extra {i}")
 
-class ProjectDocumentAPITestCase(APITestCase):
+        response = self.client.get('/api/core/projects/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('count', response.data)
+        self.assertIn('results', response.data)
+        self.assertEqual(response.data['count'], 6)
+        self.assertIsInstance(response.data['results'], list)
+
+    def test_pagination_custom_page_size(self):
+        for i in range(5):
+            Project.objects.create(name=f"Proyecto Paginado {i}")
+
+        response = self.client.get('/api/core/projects/?page_size=2')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 2)
+        self.assertIsNotNone(response.data['next'])
+
+    def test_pagination_disabled_via_query_param(self):
+        for i in range(3):
+            Project.objects.create(name=f"Proyecto Sin Paginacion {i}")
+
+        response = self.client.get('/api/core/projects/?paginate=false')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        self.assertGreaterEqual(len(response.data), 4)
+
+
+class SupplierAPITestCase(APITestCase):
     def setUp(self):
-        self.project = Project.objects.create(name="Condominio El Prado")
-        self.category = Category.objects.create(name="Materiales")
-        self.subcat = Subcategory.objects.create(category=self.category, name="Acero y Fierro")
+        self.supplier_mat = Supplier.objects.create(
+            name="Monterrey S.R.L.",
+            supplier_type=SupplierType.MATERIAL,
+            contact_name="Carlos Monterrey",
+            phone="70012345",
+            email="ventas@monterrey.com.bo",
+            address="Av. Banzer 4to Anillo"
+        )
+        self.supplier_lab = Supplier.objects.create(
+            name="Cuadrilla Hermanos Flores",
+            supplier_type=SupplierType.LABOR,
+            contact_name="Juan Flores",
+            phone="71098765",
+            email="cuadrilla.flores@gmail.com"
+        )
 
-    def test_upload_project_document(self):
-        dummy_pdf = SimpleUploadedFile(
-            "cotizacion_fierro.pdf",
-            b"%PDF-1.4 dummy pdf content for testing",
-            content_type="application/pdf"
+    def test_list_suppliers(self):
+        response = self.client.get('/api/core/suppliers/?paginate=false')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data), 2)
+
+    def test_filter_by_supplier_type(self):
+        Supplier.objects.create(
+            name="Constructora Integral Ambos",
+            supplier_type=SupplierType.BOTH,
+        )
+        response_mat = self.client.get('/api/core/suppliers/?supplier_type=material&paginate=false')
+        self.assertEqual(response_mat.status_code, status.HTTP_200_OK)
+        names_mat = [s['name'] for s in response_mat.data]
+        self.assertIn("Monterrey S.R.L.", names_mat)
+        self.assertIn("Constructora Integral Ambos", names_mat)
+        self.assertNotIn("Cuadrilla Hermanos Flores", names_mat)
+
+        response_lab = self.client.get('/api/core/suppliers/?supplier_type=labor&paginate=false')
+        self.assertEqual(response_lab.status_code, status.HTTP_200_OK)
+        names_lab = [s['name'] for s in response_lab.data]
+        self.assertIn("Cuadrilla Hermanos Flores", names_lab)
+        self.assertIn("Constructora Integral Ambos", names_lab)
+        self.assertNotIn("Monterrey S.R.L.", names_lab)
+
+    def test_search_suppliers(self):
+        response = self.client.get('/api/core/suppliers/?search=Flores&paginate=false')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['name'], "Cuadrilla Hermanos Flores")
+
+    def test_create_supplier_with_photo(self):
+        dummy_img = SimpleUploadedFile(
+            "logo_prometeo.png",
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRdummy",
+            content_type="image/png"
         )
         payload = {
-            "project": self.project.id,
-            "title": "Cotización Fierro Las Lomas",
-            "document_type": DocumentType.QUOTATION,
-            "file": dummy_pdf,
-            "supplier_name": "Las Lomas SRL",
-            "quoted_amount": "12500.50",
-            "currency": "BOB",
-            "subcategory": self.subcat.id,
-            "notes": "Válida hasta fin de mes",
+            "name": "Prometeo Aceros",
+            "supplier_type": SupplierType.MATERIAL,
+            "contact_name": "Ing. Marco Pérez",
+            "phone": "77788990",
+            "email": "contacto@prometeo.com",
+            "address": "Parque Industrial Manzana 12",
+            "photo": dummy_img,
+            "notes": "Descuento 5% en compras mayores a 10 toneladas"
         }
-        response = self.client.post('/api/core/project-documents/', payload, format='multipart')
+        response = self.client.post('/api/core/suppliers/', payload, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['title'], "Cotización Fierro Las Lomas")
-        self.assertEqual(response.data['supplier_name'], "Las Lomas SRL")
-        self.assertEqual(response.data['file_extension'], "pdf")
-        self.assertTrue(response.data['file_url'].endswith('.pdf'))
+        self.assertEqual(response.data['name'], "Prometeo Aceros")
+        self.assertTrue(response.data['photo_url'].endswith('.png'))
 
-        doc_id = response.data['id']
-        doc = ProjectDocument.objects.get(id=doc_id)
-        self.assertTrue(os.path.exists(doc.file.path))
+        sup_id = response.data['id']
+        supplier = Supplier.objects.get(id=sup_id)
+        self.assertTrue(os.path.exists(supplier.photo.path))
 
-        file_path = doc.file.path
-        del_resp = self.client.delete(f'/api/core/project-documents/{doc_id}/')
+        photo_path = supplier.photo.path
+        del_resp = self.client.delete(f'/api/core/suppliers/{sup_id}/')
         self.assertEqual(del_resp.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(os.path.exists(file_path))
+        self.assertFalse(os.path.exists(photo_path))
 
-    def test_reject_invalid_file_extension(self):
-        dummy_exe = SimpleUploadedFile(
-            "malicious.exe",
-            b"fake executable binary",
-            content_type="application/octet-stream"
-        )
+    def test_duplicate_supplier_name_rejected(self):
         payload = {
-            "project": self.project.id,
-            "title": "Archivo Malicioso",
-            "file": dummy_exe,
+            "name": "Monterrey S.R.L.",
+            "supplier_type": SupplierType.MATERIAL,
         }
-        response = self.client.post('/api/core/project-documents/', payload, format='multipart')
+        response = self.client.post('/api/core/suppliers/', payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("file", response.data)
-
-    def test_documents_summary_endpoint(self):
-        dummy_pdf1 = SimpleUploadedFile("quote1.pdf", b"pdf content 1", content_type="application/pdf")
-        dummy_pdf2 = SimpleUploadedFile("quote2.pdf", b"pdf content 2", content_type="application/pdf")
-
-        ProjectDocument.objects.create(
-            project=self.project,
-            title="Cotización 1",
-            document_type=DocumentType.QUOTATION,
-            file=dummy_pdf1,
-            file_name="quote1.pdf",
-            file_size=100,
-            file_extension="pdf",
-            quoted_amount=Decimal('5000.00'),
-            currency='BOB'
-        )
-        ProjectDocument.objects.create(
-            project=self.project,
-            title="Ficha Técnica 1",
-            document_type=DocumentType.TECHNICAL_SHEET,
-            file=dummy_pdf2,
-            file_name="quote2.pdf",
-            file_size=200,
-            file_extension="pdf",
-            quoted_amount=Decimal('800.00'),
-            currency='USD'
-        )
-
-        response = self.client.get(f'/api/core/project-documents/summary/?project={self.project.id}')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['total_documents'], 2)
-        self.assertEqual(response.data['quotations_count'], 1)
-        self.assertEqual(response.data['technical_sheets_count'], 1)
-        self.assertEqual(response.data['total_quoted_bob'], 5000.0)
-        self.assertEqual(response.data['total_quoted_usd'], 800.0)
+        self.assertIn("name", response.data)
 
 
-class ProjectExpenseAPITestCase(APITestCase):
+class ConstructionStageAPITestCase(APITestCase):
     def setUp(self):
-        self.project = Project.objects.create(name="Complejo Habitacional Olivos")
-        self.category = Category.objects.create(name="Materiales")
-        self.subcat = Subcategory.objects.create(category=self.category, name="Acero Corrugado")
-
-    def test_create_expense_with_receipt(self):
-        dummy_receipt = SimpleUploadedFile(
-            "factura_120.pdf",
-            b"%PDF-1.4 factura content",
-            content_type="application/pdf"
+        ConstructionStage.objects.all().delete()
+        self.stage1 = ConstructionStage.objects.create(
+            name="Obra Bruta",
+            description="Cimientos, estructura portante y losas",
+            order=1,
+            color="amber"
         )
+        self.stage2 = ConstructionStage.objects.create(
+            name="Obra Fina",
+            description="Yeso, pinturas y porcelanatos",
+            order=2,
+            color="emerald"
+        )
+
+    def tearDown(self):
+        ConstructionStage.objects.all().delete()
+
+    def test_list_stages_ordered(self):
+        response = self.client.get('/api/core/stages/?paginate=false')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]['name'], "Obra Bruta")
+        self.assertEqual(response.data[1]['name'], "Obra Fina")
+
+    def test_create_stage(self):
+        payload = {
+            "name": "Equipamiento",
+            "description": "Luminarias y muebles empotrados",
+            "order": 3,
+            "color": "blue"
+        }
+        response = self.client.post('/api/core/stages/', payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['name'], "Equipamiento")
+        self.assertEqual(response.data['order'], 3)
+
+    def test_unique_stage_name(self):
+        payload = {"name": "Obra Bruta"}
+        response = self.client.post('/api/core/stages/', payload)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class UnifiedBudgetStrategyTestCase(TestCase):
+    """Pruebas unitarias de las estrategias DDD del motor presupuestario."""
+
+    def setUp(self):
+        self.project = Project.objects.create(
+            name="Condominio Los Robles",
+            built_area=Decimal('200.00'),
+            exchange_rate=Decimal('6.9700')
+        )
+        self.category = Category.objects.create(name="Materiales")
+        self.subcategory = Subcategory.objects.create(category=self.category, name="Fierros")
+        self.uom_ml = UnitOfMeasure.objects.create(name="Metro Lineal", abbreviation="ml")
+        self.pu_barra = PurchaseUnit.objects.create(name="Barra 12m", abbreviation="barra")
+
+    def test_material_strategy_ceil_enabled(self):
+        # 100 ml con 10% merma = 110 ml. 110 / 12 = 9.1667 -> ceil = 10 barras
+        item = BudgetItem.objects.create(
+            project=self.project,
+            category_type=BudgetCategoryType.MATERIALS,
+            subcategory=self.subcategory,
+            name="Fierro 12mm",
+            unit_measure=self.uom_ml,
+            unit_purchase=self.pu_barra,
+            conversion_factor=Decimal('12.0000'),
+            waste_pct=Decimal('0.1000'),
+            quantity_obra=Decimal('100.0000'),
+            unit_price=Decimal('70.00'),
+            weight_per_purchase_unit=Decimal('10.5000'),
+            apply_ceil=True
+        )
+        self.assertEqual(item.quantity_purchase, Decimal('10'))
+        self.assertEqual(item.estimated_cost, Decimal('700.00'))
+        self.assertEqual(item.weight_total, Decimal('105.0000'))
+        self.assertEqual(item.cost_usd, Decimal('100.43'))
+
+    def test_material_strategy_ceil_disabled(self):
+        # 100 ml con 10% merma = 110 ml. 110 / 12 = 9.1667 barras exactas
+        item = BudgetItem.objects.create(
+            project=self.project,
+            category_type=BudgetCategoryType.MATERIALS,
+            subcategory=self.subcategory,
+            name="Fierro 12mm Fraccional",
+            unit_measure=self.uom_ml,
+            unit_purchase=self.pu_barra,
+            conversion_factor=Decimal('12.0000'),
+            waste_pct=Decimal('0.1000'),
+            quantity_obra=Decimal('100.0000'),
+            unit_price=Decimal('70.00'),
+            apply_ceil=False
+        )
+        self.assertEqual(item.quantity_purchase, Decimal('9.1667'))
+        self.assertEqual(item.estimated_cost, Decimal('641.67'))
+
+    def test_labor_strategy_metrics(self):
+        item = BudgetItem.objects.create(
+            project=self.project,
+            category_type=BudgetCategoryType.LABOR,
+            subcategory=self.subcategory,
+            name="Encofrado de losas",
+            unit_measure=self.uom_ml,
+            quantity_obra=Decimal('150.0000'),
+            unit_price=Decimal('80.00'),
+            contractor_name="Cuadrilla Don Carlos"
+        )
+        self.assertEqual(item.estimated_cost, Decimal('12000.00'))
+        self.assertIsNone(item.weight_total)
+        # 12000 / 6.97 = 1721.66 USD. 1721.66 / 200 m2 = 8.61 $/m2
+        self.assertEqual(item.cost_usd, Decimal('1721.66'))
+        self.assertEqual(item.cost_per_m2_usd, Decimal('8.61'))
+
+    def test_operating_and_admin_strategy_percentage(self):
+        # Gasto administrativo / utilidad corporativa del 15% sobre base de 100,000 Bs
+        admin_item = BudgetItem.objects.create(
+            project=self.project,
+            category_type=BudgetCategoryType.ADMINISTRATIVE,
+            name="Utilidad de Obra 15%",
+            percentage_applied=Decimal('0.1500'),
+            target_base_cost=Decimal('100000.00')
+        )
+        self.assertEqual(admin_item.estimated_cost, Decimal('15000.00'))
+
+    def test_operating_strategy_validations(self):
+        item = BudgetItem(
+            project=self.project,
+            category_type=BudgetCategoryType.OPERATING,
+            name="Gastos Legales",
+            percentage_applied=Decimal('-0.05'),
+            target_base_cost=Decimal('-1000.00')
+        )
+        with self.assertRaises(Exception):
+            item.full_clean()
+
+    def test_cached_property_memoization(self):
+        item = BudgetItem.objects.create(
+            project=self.project,
+            category_type=BudgetCategoryType.LABOR,
+            subcategory=self.subcategory,
+            name="Pintura General",
+            unit_measure=self.uom_ml,
+            quantity_obra=Decimal('100.0000'),
+            unit_price=Decimal('50.00')
+        )
+        # Primer acceso calcula y puebla el caché
+        metrics = item.calculated_metrics
+        self.assertIn('calculated_metrics', item.__dict__)
+        self.assertIs(item.calculated_metrics, metrics)
+        # Acceso sucesivo a propiedades no recrea el diccionario
+        _ = item.estimated_cost
+        _ = item.cost_usd
+        _ = item.cost_per_m2_usd
+        self.assertIs(item.calculated_metrics, metrics)
+
+
+class BudgetItemAPITestCase(APITestCase):
+    """Pruebas funcionales de los endpoints de BudgetItemViewSet."""
+
+    def setUp(self):
+        self.project = Project.objects.create(
+            name="Residencial Magnolia",
+            built_area=Decimal('150.00'),
+            exchange_rate=Decimal('6.9700')
+        )
+        self.stage = ConstructionStage.objects.create(name="Obra Bruta", order=1)
+        self.cat_mat = Category.objects.create(name="Materiales")
+        self.subcat_cemento = Subcategory.objects.create(category=self.cat_mat, name="Cementos")
+        self.subcat_acero = Subcategory.objects.create(category=self.cat_mat, name="Aceros")
+
+        self.uom_bolsa = UnitOfMeasure.objects.create(name="Bolsa 50kg", abbreviation="bolsa")
+        self.pu_bolsa = PurchaseUnit.objects.create(name="Bolsa", abbreviation="bolsa")
+
+        self.supplier = Supplier.objects.create(
+            name="Itacamba Cemento",
+            supplier_type=SupplierType.MATERIAL
+        )
+
+        self.item = BudgetItem.objects.create(
+            project=self.project,
+            stage=self.stage,
+            category_type=BudgetCategoryType.MATERIALS,
+            subcategory=self.subcat_cemento,
+            supplier=self.supplier,
+            name="Cemento Estructural IP-40",
+            unit_measure=self.uom_bolsa,
+            unit_purchase=self.pu_bolsa,
+            conversion_factor=Decimal('1.0000'),
+            quantity_obra=Decimal('50.0000'),
+            unit_price=Decimal('52.00'),
+            apply_ceil=True
+        )
+
+    def test_list_budget_items_and_filter_stage(self):
+        response = self.client.get(f'/api/core/budget-items/?project={self.project.id}&stage={self.stage.id}&paginate=false')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['name'], "Cemento Estructural IP-40")
+        self.assertEqual(response.data[0]['stage_name'], "Obra Bruta")
+        self.assertEqual(response.data[0]['supplier_name'], "Itacamba Cemento")
+
+    def test_reassign_subcategory_dynamically(self):
+        # UC-005: Reasignación de subcategoría mediante edición directa
+        payload = {"subcategory": self.subcat_acero.id}
+        response = self.client.patch(f'/api/core/budget-items/{self.item.id}/', payload)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.subcategory_id, self.subcat_acero.id)
+
+    def test_grouped_by_project_accordion_endpoint(self):
+        # Endpoint consumido por la vista acordeón
+        response = self.client.get(f'/api/core/budget-items/by-project/?project={self.project.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        group = response.data[0]
+        self.assertEqual(group['subcategory_name'], "Cementos")
+        self.assertEqual(Decimal(group['subtotal_cost_bs']), Decimal('2600.00'))
+        self.assertIn("50 Bolsa", group['total_purchase_units_summary'])
+
+    def test_summary_endpoint(self):
+        response = self.client.get(f'/api/core/budget-items/summary/?project={self.project.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(response.data['total_budget_bs']), Decimal('2600.00'))
+        self.assertEqual(response.data['materials']['items_count'], 1)
+
+    def test_from_catalog_materials_and_supplier_photo_url(self):
+        from materials.models import MaterialCatalogItem
+        cat_item = MaterialCatalogItem.objects.create(
+            subcategory=self.subcat_cemento,
+            supplier=self.supplier,
+            name="Cemento Camba IP-30",
+            description="Bolsa de 50kg resistente a sulfatos",
+            unit_measure=self.uom_bolsa,
+            unit_purchase=self.pu_bolsa,
+            conversion_factor=Decimal('1.0000'),
+            waste_pct=Decimal('0.0500'),
+            price_per_purchase_unit=Decimal('50.00')
+        )
+        # Verificar serialización del catálogo con proveedor adjunto (supplier_photo_url)
+        cat_resp = self.client.get(f'/api/materials/catalog/{cat_item.id}/')
+        self.assertEqual(cat_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(cat_resp.data['supplier_name'], "Itacamba Cemento")
+        self.assertIsNone(cat_resp.data['supplier_photo_url'])
+
+        # Instanciar en BudgetItem unificado desde catálogo de materiales
         payload = {
             "project": self.project.id,
-            "category_type": ExpenseCategoryType.MATERIALS,
-            "subcategory": self.subcat.id,
-            "item_name": 'Barra de acero corrugado 3/8"x12m. (10mm²)',
-            "unit_name": "Barra",
-            "quantity": "220.00",
-            "unit_price": "55.00",
-            "payment_status": PaymentStatus.PAID,
-            "expense_date": "2026-06-24",
-            "payment_method": "AL CONTADO",
-            "details": "Comprado en Ferretería Central",
-            "rendicion_number": "Nr° 04",
-            "receipt_number": "FAC-8891",
-            "receipt_file": dummy_receipt,
+            "catalog_type": "materials",
+            "catalog_id": cat_item.id,
+            "stage": self.stage.id,
+            "quantity_obra": "20.0000",
+            "apply_ceil": True
         }
-        response = self.client.post('/api/core/project-expenses/', payload, format='multipart')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Decimal(str(response.data['total_price'])), Decimal('12100.00'))
-        self.assertEqual(response.data['rendicion_number'], "Nr° 04")
-        self.assertTrue(response.data['receipt_file_url'].endswith('.pdf'))
+        resp = self.client.post('/api/core/budget-items/from-catalog/', payload, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data['name'], "Cemento Camba IP-30")
+        self.assertEqual(resp.data['detail'], "Bolsa de 50kg resistente a sulfatos")
+        # 20 * 1.05 = 21 bolsas * 50 Bs = 1050.00 Bs
+        self.assertEqual(Decimal(resp.data['quantity_purchase']), Decimal('21.0000'))
+        self.assertEqual(Decimal(resp.data['estimated_cost']), Decimal('1050.00'))
 
-        expense_id = response.data['id']
-        expense = ProjectExpense.objects.get(id=expense_id)
-        self.assertTrue(os.path.exists(expense.receipt_file.path))
-
-        # Check delete cleans up receipt
-        file_path = expense.receipt_file.path
-        del_resp = self.client.delete(f'/api/core/project-expenses/{expense_id}/')
-        self.assertEqual(del_resp.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(os.path.exists(file_path))
-
-    def test_expenses_summary_endpoint(self):
-        ProjectExpense.objects.create(
-            project=self.project,
-            category_type=ExpenseCategoryType.MATERIALS,
-            subcategory=self.subcat,
-            item_name="Fierro 1/2",
-            unit_name="Barra",
-            quantity=Decimal('38.00'),
-            unit_price=Decimal('93.00'),
-            total_price=Decimal('3534.00'),
-            payment_status=PaymentStatus.PAID,
-            expense_date="2026-06-24",
-            rendicion_number="Nr° 04"
-        )
-        ProjectExpense.objects.create(
-            project=self.project,
-            category_type=ExpenseCategoryType.LABOR,
-            item_name="Estructura Hormigón Armado",
-            unit_name="Gbl",
-            quantity=Decimal('1.00'),
-            unit_price=Decimal('40000.00'),
-            total_price=Decimal('40000.00'),
-            payment_status=PaymentStatus.PAID,
-            expense_date="2026-07-04",
-            rendicion_number="Nr° 04"
-        )
-        ProjectExpense.objects.create(
-            project=self.project,
-            category_type=ExpenseCategoryType.OPERATING,
-            item_name="Transporte de material",
-            unit_name="Gbl",
-            quantity=Decimal('1.00'),
-            unit_price=Decimal('1500.00'),
-            total_price=Decimal('1500.00'),
-            payment_status=PaymentStatus.IN_PROCESS,
-            expense_date="2026-07-10",
-            rendicion_number="Nr° 04"
-        )
-
-        response = self.client.get(f'/api/core/project-expenses/summary/?project={self.project.id}')
+    def test_budget_grouped_by_stage_endpoint(self):
+        """Verifica el endpoint jerárquico by-stage (Etapas -> Subcategorías -> Partidas)."""
+        response = self.client.get(f'/api/core/budget-items/by-stage/?project={self.project.id}&category_type=materials')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['total_count'], 3)
-        self.assertEqual(response.data['total_amount'], 45034.0)
-        self.assertEqual(response.data['paid_amount'], 43534.0)
-        self.assertEqual(response.data['in_process_amount'], 1500.0)
-        self.assertEqual(response.data['materials_amount'], 3534.0)
-        self.assertEqual(response.data['labor_amount'], 40000.0)
-        self.assertEqual(response.data['operating_amount'], 1500.0)
-        self.assertIn("Nr° 04", response.data['rendiciones'])
+        self.assertIsInstance(response.data, list)
+        self.assertGreaterEqual(len(response.data), 1)
+
+        stage_group = response.data[0]
+        self.assertEqual(stage_group['stage_id'], self.stage.id)
+        self.assertEqual(stage_group['stage_name'], "Obra Bruta")
+        self.assertIn('%', stage_group['percentage_of_family'])
+        self.assertIn('cost_per_m2_usd', stage_group)
+        self.assertIn('subcategories', stage_group)
+        self.assertGreaterEqual(len(stage_group['subcategories']), 1)
+
+        sub_group = stage_group['subcategories'][0]
+        self.assertEqual(sub_group['subcategory_name'], "Cementos")
+        self.assertGreaterEqual(len(sub_group['items']), 1)
+
+
+class CustomExceptionHandlerTests(TestCase):
+    """Pruebas unitarias para el manejador global de excepciones (core.exceptions)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.cat = Category.objects.create(name="Mano de Obra")
+        self.sub = Subcategory.objects.create(name="Prueba Sub", category=self.cat)
+        self.uom = UnitOfMeasure.objects.create(name="Metro", abbreviation="m")
+
+    def test_protected_error_returns_clean_400_json(self):
+        """Si un registro tiene dependencias protegidas, responde 400 JSON sin fugar datos del sistema."""
+        from labor.models import LaborCatalogItem
+        LaborCatalogItem.objects.create(
+            subcategory=self.sub,
+            name="Tarea Dependiente",
+            unit=self.uom,
+            suggested_cost=Decimal('50.00')
+        )
+        resp = self.client.delete(f'/api/core/subcategories/{self.sub.id}/')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'protected_dependency_error')
+        self.assertIn('No se puede eliminar este registro porque actualmente está en uso', resp.data['detail'])
+        self.assertEqual(resp.data['count'], 1)
+
+    def test_unhandled_exception_returns_clean_500_json(self):
+        """Cualquier excepción inesperada responde 500 JSON estético sin stacktrace."""
+        from core.exceptions import custom_exception_handler
+        resp = custom_exception_handler(Exception("Crash inesperado"), {'view': None})
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.data['code'], 'internal_server_error')
+        self.assertIn('Ha ocurrido un error inesperado', resp.data['detail'])
+
+
+
+
+
+

@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     'storages',
     'core',
     'materials',
-    'inventory',
     'labor',
 ]
 
@@ -190,6 +189,9 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
+    'PAGE_SIZE': 25,
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
 # CORS Configuration

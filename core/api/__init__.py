@@ -3,8 +3,9 @@ from .category_viewset import CategoryViewSet
 from .subcategory_viewset import SubcategoryViewSet
 from .unit_of_measure_viewset import UnitOfMeasureViewSet
 from .purchase_unit_viewset import PurchaseUnitViewSet
-from .project_document_viewset import ProjectDocumentViewSet
-from .project_expense_viewset import ProjectExpenseViewSet
+from .supplier_viewset import SupplierViewSet
+from .construction_stage_viewset import ConstructionStageViewSet
+from .budget_item_viewset import BudgetItemViewSet
 
 __all__ = [
     'ProjectViewSet',
@@ -12,6 +13,7 @@ __all__ = [
     'SubcategoryViewSet',
     'UnitOfMeasureViewSet',
     'PurchaseUnitViewSet',
-    'ProjectDocumentViewSet',
-    'ProjectExpenseViewSet',
+    'SupplierViewSet',
+    'ConstructionStageViewSet',
+    'BudgetItemViewSet',
 ]

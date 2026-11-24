@@ -1,22 +1,29 @@
 from django.db.models import Count
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, mixins, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from core.models import Category
 from core.serializers import CategorySerializer, SubcategorySerializer
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
     """
-    CRUD para Categorías de presupuesto (Materiales, Mano de Obra, Gastos Generales, etc.).
+    Lectura y renombrado de Categorías maestras de presupuesto.
+    La creación y eliminación están bloqueadas por API (gestionadas por código/migraciones).
     """
     queryset = Category.objects.annotate(
         subcategories_count=Count('subcategories')
     ).prefetch_related('subcategories').all()
     serializer_class = CategorySerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name']
-    ordering_fields = ['name', 'subcategories_count']
+    pagination_class = None
+    search_fields = ['name', 'code']
+    ordering_fields = ['name', 'subcategories_count', 'code']
     ordering = ['name']
 
     @action(detail=True, methods=['get'], url_path='subcategories')
