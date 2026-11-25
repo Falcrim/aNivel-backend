@@ -8,7 +8,10 @@ from materials.models import MaterialCatalogItem
 
 class MaterialCatalogSupplierTestCase(APITestCase):
     def setUp(self):
-        self.category = Category.objects.create(name="Materiales")
+        self.category, _ = Category.objects.get_or_create(
+            code="materials",
+            defaults={"name": "Materiales", "is_active": True},
+        )
         self.subcat = Subcategory.objects.create(category=self.category, name="Fierros")
         self.uom = UnitOfMeasure.objects.create(name="Metro lineal", abbreviation="ml")
         self.pu = PurchaseUnit.objects.create(name="Barra 12m", abbreviation="barra")

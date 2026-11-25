@@ -20,7 +20,10 @@ from core.models import (
 
 class CoreModelsTestCase(TestCase):
     def setUp(self):
-        self.category = Category.objects.create(name="Materiales")
+        self.category, _ = Category.objects.get_or_create(
+            code="materials",
+            defaults={"name": "Materiales", "is_active": True},
+        )
         self.subcat = Subcategory.objects.create(category=self.category, name="Fierros")
         self.uom = UnitOfMeasure.objects.create(name="Metros Lineales", abbreviation="ml")
         self.pu = PurchaseUnit.objects.create(name="Barra 12m", abbreviation="barra")
@@ -64,6 +67,19 @@ class CoreAPITestCase(APITestCase):
         response = self.client.get(f'/api/core/categories/{self.category.id}/subcategories/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
+
+    def test_default_categories_seeded_by_migration(self):
+        response = self.client.get('/api/core/categories/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        by_code = {c['code']: c for c in response.data}
+        self.assertIn('materials', by_code)
+        self.assertTrue(by_code['materials']['is_active'])
+        self.assertIn('labor', by_code)
+        self.assertTrue(by_code['labor']['is_active'])
+        self.assertIn('operating', by_code)
+        self.assertFalse(by_code['operating']['is_active'])
+        self.assertIn('administrative', by_code)
+        self.assertFalse(by_code['administrative']['is_active'])
 
     def test_category_create_and_delete_blocked(self):
         create_resp = self.client.post('/api/core/categories/', {'name': 'Nueva Categoria'})
@@ -262,7 +278,10 @@ class UnifiedBudgetStrategyTestCase(TestCase):
             built_area=Decimal('200.00'),
             exchange_rate=Decimal('6.9700')
         )
-        self.category = Category.objects.create(name="Materiales")
+        self.category, _ = Category.objects.get_or_create(
+            code="materials",
+            defaults={"name": "Materiales", "is_active": True},
+        )
         self.subcategory = Subcategory.objects.create(category=self.category, name="Fierros")
         self.uom_ml = UnitOfMeasure.objects.create(name="Metro Lineal", abbreviation="ml")
         self.pu_barra = PurchaseUnit.objects.create(name="Barra 12m", abbreviation="barra")
@@ -376,7 +395,10 @@ class BudgetItemAPITestCase(APITestCase):
             exchange_rate=Decimal('6.9700')
         )
         self.stage = ConstructionStage.objects.create(name="Obra Bruta", order=1)
-        self.cat_mat = Category.objects.create(name="Materiales")
+        self.cat_mat, _ = Category.objects.get_or_create(
+            code="materials",
+            defaults={"name": "Materiales", "is_active": True},
+        )
         self.subcat_cemento = Subcategory.objects.create(category=self.cat_mat, name="Cementos")
         self.subcat_acero = Subcategory.objects.create(category=self.cat_mat, name="Aceros")
 
@@ -496,7 +518,10 @@ class CustomExceptionHandlerTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.cat = Category.objects.create(name="Mano de Obra")
+        self.cat, _ = Category.objects.get_or_create(
+            code="labor",
+            defaults={"name": "Mano de Obra", "is_active": True},
+        )
         self.sub = Subcategory.objects.create(name="Prueba Sub", category=self.cat)
         self.uom = UnitOfMeasure.objects.create(name="Metro", abbreviation="m")
 

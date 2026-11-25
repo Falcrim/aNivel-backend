@@ -9,7 +9,10 @@ from labor.models import LaborCatalogItem
 
 class LaborCatalogModelTestCase(TestCase):
     def setUp(self):
-        self.category = Category.objects.create(name='Mano de Obra')
+        self.category, _ = Category.objects.get_or_create(
+            code='labor',
+            defaults={'name': 'Mano de Obra', 'is_active': True},
+        )
         self.subcategory = Subcategory.objects.create(category=self.category, name='Obra Gris')
         self.unit_m2 = UnitOfMeasure.objects.create(name='Metro Cuadrado', abbreviation='m2')
 
@@ -29,7 +32,10 @@ class LaborCatalogModelTestCase(TestCase):
 
 class LaborCatalogSupplierTestCase(APITestCase):
     def setUp(self):
-        self.category = Category.objects.create(name='Mano de Obra')
+        self.category, _ = Category.objects.get_or_create(
+            code='labor',
+            defaults={'name': 'Mano de Obra', 'is_active': True},
+        )
         self.subcat = Subcategory.objects.create(category=self.category, name='Instalaciones')
         self.unit = UnitOfMeasure.objects.create(name='Punto', abbreviation='pto')
         self.contractor = Supplier.objects.create(
